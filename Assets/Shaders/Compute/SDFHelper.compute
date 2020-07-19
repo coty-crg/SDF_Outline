@@ -1,0 +1,98 @@
+﻿#pragma kernel ClearMask
+#pragma kernel ClearSDF
+#pragma kernel Initialize
+#pragma kernel Step
+
+// R8 
+Texture2D<float> MaskInput; 
+RWTexture2D<float> MaskOutput; 
+
+// RGBA_Float
+// xy = uv of surface, z = distance from surface, w = confidence (alpha) 
+RWTexture2D<float4> SDFInput; 
+RWTexture2D<float4> SDFOutput;
+
+uniform int texture_width;
+uniform int texture_height;
+uniform int maximum_outline_width;
+
+[numthreads(8,8,1)]
+void ClearMask(int3 id : SV_DispatchThreadID)
+{
+    MaskOutput[id.xy] = 0.0;
+}
+
+[numthreads(8, 8, 1)]
+void ClearSDF(int3 id : SV_DispatchThreadID)
+{
+    SDFOutput[id.xy] = float4(0.0, 0.0, 0.0, -1.0);
+}
+
+[numthreads(8, 8, 1)]
+void Initialize(int3 id : SV_DispatchThreadID)
+{
+    float input = MaskInput[id.xy];
+
+    float uv_x = (float) id.x / texture_width;
+    float uv_y = (float) id.y / texture_height;
+
+    SDFOutput[id.xy] = float4(uv_x, uv_y, input > 0.1 ? 0.0 : -1.0, 0.0);
+}
+
+[numthreads(8, 8, 1)]
+void Step(int3 id : SV_DispatchThreadID)
+{
+    // bounds checks 
+    if (id.x == 0) return;
+    if (id.y == 0) return;
+    if (id.x == texture_width  - 1) return;
+    if (id.y == texture_height - 1) return;
+
+    float4 smallest_result = SDFInput[id.xy];
+    float smallest_distance = 1000;
+
+    float uv_x = (float) id.x / texture_width;
+    float uv_y = (float) id.y / texture_height;
+    float2 uv = float2(uv_x, uv_y);
+
+    for (int x = -1; x <= 1; ++x)
+    {
+        for (int y = -1; y <= 1; ++y)
+        {
+            if (x == 0 && y == 0) continue;
+
+            float4 result = SDFInput[id.xy + int2(x, y)];
+            float result_distance = result.z;
+
+            if (result_distance >= 0)
+            {
+                float2 result_uv = result.xy;
+                float2 to_result = result_uv - uv;
+                float to_distance = length(to_result); 
+
+                if (to_distance < smallest_distance)
+                {
+                    smallest_distance = to_distance;
+                    smallest_result = result;
+                }
+            }
+        }
+    }
+
+    // did not find any surfaces
+    if (smallest_distance == 1000.0)
+    {
+        SDFOutput[id.xy] = smallest_result;
+    }
+    // found a surface or a pointer to surfacce
+    else 
+    {
+        float4 result = smallest_result;
+        result.z = smallest_distance;
+        result.w = 1.0 - smallest_distance * texture_width / maximum_outline_width;
+        SDFOutput[id.xy] = result;
+    }
+}
+
+
+
