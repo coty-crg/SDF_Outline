@@ -50,16 +50,23 @@
 
                 float4 sdf = tex2D(_OutlineSDF, i.uv);
 
-                if (sdf.z > 0.005)
+                if (sdf.z > 0.001)
                 {
                     float distance = max(0, sdf.z);
-                    float looping = sin(distance * 64 - _Time.y * 10);
+                    float sdf_alpha = saturate(sdf.w);
+
+                    float looping = sin(distance * 32 - _Time.y * 10);
                     looping = max(0, looping);
 
-                    col.rgb += _Color* looping * saturate(sdf.w);
+                    float2 direction = (sdf.xy - i.uv);
+                    fixed4 col_distorted = tex2D(_MainTex, i.uv + direction * 1);
+
+                    col.rgb = lerp(col.rgb, col_distorted.rgb, looping * sdf_alpha);
+
+                    col.rgb += _Color * looping * 0.1 * sdf_alpha;
                 }
 
-                return col;
+                return col * 0.0;
             }
             ENDCG
         }

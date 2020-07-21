@@ -3,7 +3,8 @@ guid: ba1bf971b4cf93e46aabd9e4be0dd789
 MonoImporter:
   externalObjects: {}
   serializedVersion: 2
-  defaultReferences: []
+  defaultReferences:
+  - BlitMaterial: {fileID: 2100000, guid: 553347b5d4b75a543b07efcbd66c0bb9, type: 2}
   executionOrder: 0
   icon: {instanceID: 0}
   userData: 
