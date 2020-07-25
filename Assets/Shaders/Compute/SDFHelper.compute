@@ -2,6 +2,7 @@
 #pragma kernel ClearSDF
 #pragma kernel Initialize
 #pragma kernel Step
+#pragma kernel SubtractMask
 
 // R8 
 Texture2D<float> MaskInput; 
@@ -31,22 +32,43 @@ void ClearSDF(int3 id : SV_DispatchThreadID)
 [numthreads(8, 8, 1)]
 void Initialize(int3 id : SV_DispatchThreadID)
 {
-    float input = MaskInput[id.xy];
+    bool inside  = false;
+    bool outside = false;
+
+    for (int x = -1; x <= 1; ++x)
+    {
+        for (int y = -1; y <= 1; ++y)
+        {
+            float input = MaskInput[id.xy + int2(x, y)];
+
+            if (input > 0)
+            {
+                inside = true;
+            }
+            else 
+            {
+                outside = true; 
+            }
+        }
+    }
+
+    bool is_edge = inside && outside; 
 
     float uv_x = (float) id.x / texture_width;
     float uv_y = (float) id.y / texture_height;
 
-    SDFOutput[id.xy] = float4(uv_x, uv_y, input > 0.1 ? 0.0 : -1.0, 0.0);
+    SDFOutput[id.xy] = float4(uv_x, uv_y, is_edge ? 0.0 : -1.0, 0.0);
 }
 
 [numthreads(8, 8, 1)]
 void Step(int3 id : SV_DispatchThreadID)
 {
     // bounds checks 
-    if (id.x == 0) return;
-    if (id.y == 0) return;
-    if (id.x == texture_width  - 1) return;
-    if (id.y == texture_height - 1) return;
+    if (id.x == 0 || id.y == 0 || id.x == texture_width - 1 || id.y == texture_height - 1)
+    {
+        SDFOutput[id.xy] = float4(0, 0, -1, 0);
+        return;
+    }
 
     float4 smallest_result = SDFInput[id.xy];
     float smallest_distance = 1000;
@@ -59,8 +81,6 @@ void Step(int3 id : SV_DispatchThreadID)
     {
         for (int y = -1; y <= 1; ++y)
         {
-            if (x == 0 && y == 0) continue;
-
             float4 result = SDFInput[id.xy + int2(x, y)];
             float result_distance = result.z;
 
@@ -94,5 +114,20 @@ void Step(int3 id : SV_DispatchThreadID)
     }
 }
 
+[numthreads(8, 8, 1)]
+void SubtractMask(int3 id : SV_DispatchThreadID)
+{
+    float input_mask = MaskInput[id.xy];
+    float4 input_sdf = SDFInput[id.xy];
 
-
+    if (input_mask > 0)
+    {
+        // input_sdf.w = saturate(pow(saturate(input_sdf.w), 1000));
+        SDFOutput[id.xy] = float4(input_sdf.xy, -input_sdf.z, input_sdf.w);
+    }
+    else 
+    {
+        input_sdf.w = saturate(pow(saturate(input_sdf.w), 2) * 100);
+        SDFOutput[id.xy] = input_sdf;
+    }
+}

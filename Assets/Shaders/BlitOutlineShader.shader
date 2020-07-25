@@ -43,21 +43,15 @@
 
             sampler2D _OutlineSDF;
             fixed4 _Color;
+            float _MaximumOutlineDistanceInPixels;
 
             fixed4 frag (v2f i) : SV_Target
             {
                 fixed4 col = tex2D(_MainTex, i.uv);
-
                 float4 sdf = tex2D(_OutlineSDF, i.uv);
 
-                if (sdf.z > 0.005)
-                {
-                    float distance = max(0, sdf.z);
-                    float looping = sin(distance * 64 - _Time.y * 10);
-                    looping = max(0, looping);
-
-                    col.rgb += _Color* looping * saturate(sdf.w);
-                }
+                float withinRange = sdf.z < _MaximumOutlineDistanceInPixels && sdf.z > -0.0001;
+                col.rgb = lerp(col.rgb, _Color, sdf.w * withinRange);
 
                 return col;
             }

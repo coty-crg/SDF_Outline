@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq.Expressions;
 using UnityEngine;
+using UnityEngine.UI;
 
 [ExecuteInEditMode]
 public class OutlineSDFHelper : MonoBehaviour
@@ -11,16 +12,20 @@ public class OutlineSDFHelper : MonoBehaviour
     public ComputeShader SDFCompute;
     public Shader MaskShader;
     public string GlobalTextureName = "_OutlineSDF";
-    [Range(1, 200)] public int MaximumOutlineDistanceInPixels = 64; 
+    [Range(1, 200)] public int MaximumOutlineDistanceInPixels = 64;
+    public bool EnableOutlineDebug;
 
     // internal 
     private RenderTexture Mask;
     private RenderTexturePair SDF;
     private Camera ourCamera;
+    
     private int kernal_ClearMask;
     private int kernal_ClearSDF;
     private int kernal_Initialize;
     private int kernal_Step;
+    private int kernal_SubtractMask;
+
     int compute_id_MaskInput;
     int compute_id_MaskOutput;
     int compute_id_SDFInput;
@@ -34,21 +39,13 @@ public class OutlineSDFHelper : MonoBehaviour
         ourCamera = GetComponent<Camera>();
         ourCamera.enabled = false;
 
-        var width = Screen.width;
-        var height = Screen.height;
-
-        SDF = new RenderTexturePair(width, height, 24, RenderTextureFormat.ARGBFloat, false, FilterMode.Bilinear, TextureWrapMode.Clamp, false);
-        SDF.Create();
-
-        Mask = new RenderTexture(width, height, 24, RenderTextureFormat.R8);
-        Mask.wrapMode = TextureWrapMode.Clamp;
-        Mask.enableRandomWrite = true; 
-        Mask.Create();
+        EnsureBuffers(); 
 
         kernal_ClearMask = SDFCompute.FindKernel("ClearMask");
         kernal_ClearSDF = SDFCompute.FindKernel("ClearSDF");
         kernal_Initialize = SDFCompute.FindKernel("Initialize");
         kernal_Step = SDFCompute.FindKernel("Step");
+        kernal_SubtractMask = SDFCompute.FindKernel("SubtractMask");
 
         compute_id_MaskInput = Shader.PropertyToID("MaskInput");
         compute_id_MaskOutput = Shader.PropertyToID("MaskOutput");
@@ -71,8 +68,61 @@ public class OutlineSDFHelper : MonoBehaviour
 
     private void Update()
     {
+        EnsureBuffers(); 
         RenderMaskAndSDF();
-        Shader.SetGlobalTexture(GlobalTextureName, SDF.GetReader()); 
+        HandleDebug();
+        Shader.SetGlobalTexture(GlobalTextureName, SDF.GetReader());
+        Shader.SetGlobalFloat("_MaximumOutlineDistanceInPixels", MaximumOutlineDistanceInPixels);
+    }
+
+    private void HandleDebug()
+    {
+        var debugCanvas = transform.Find("DebugCanvas");
+        if (debugCanvas == null) return;
+
+        debugCanvas.gameObject.SetActive(EnableOutlineDebug);
+
+        var image_mask = debugCanvas.Find("Buffer_Mask").GetComponent<RawImage>();
+        var image_sdf = debugCanvas.Find("Buffer_SDF").GetComponent<RawImage>();
+
+        image_mask.texture = Mask;
+        image_sdf.texture = SDF.GetReader();
+
+        var rect_mask = image_mask.GetComponent<RectTransform>();
+        var rect_sdf = image_sdf.GetComponent<RectTransform>();
+
+        rect_mask.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, Mask.width * 0.25f);
+        rect_mask.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, Mask.height * 0.25f);
+
+        rect_sdf.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, Mask.width * 0.25f);
+        rect_sdf.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, Mask.height * 0.25f);
+    }
+
+    private void EnsureBuffers()
+    {
+        var width = Screen.width;
+        var height = Screen.height;
+
+        if(SDF == null || SDF.GetWidth() != width || SDF.GetHeight() != height)
+        {
+            if(SDF != null)
+            {
+                SDF.Release();
+            }
+
+            if(Mask != null)
+            {
+                Mask.Release();
+            }
+
+            SDF = new RenderTexturePair(width, height, 24, RenderTextureFormat.ARGBFloat, false, FilterMode.Bilinear, TextureWrapMode.Clamp, false);
+            SDF.Create();
+
+            Mask = new RenderTexture(width, height, 24, RenderTextureFormat.R8);
+            Mask.wrapMode = TextureWrapMode.Clamp;
+            Mask.enableRandomWrite = true;
+            Mask.Create();
+        }
     }
 
     public void RenderMaskAndSDF()
@@ -96,6 +146,8 @@ public class OutlineSDFHelper : MonoBehaviour
         {
             StepSDF();
         }
+
+        SubtractMaskFromSDF(); 
     }
 
     private void ClearTexturesContents()
@@ -119,6 +171,16 @@ public class OutlineSDFHelper : MonoBehaviour
         SDFCompute.Dispatch(kernal_Initialize, Mask.width / 8, Mask.height / 8, 1); 
 
         SDF.Swap(); 
+    }
+
+    private void SubtractMaskFromSDF()
+    {
+        SDFCompute.SetTexture(kernal_SubtractMask, compute_id_MaskInput, Mask);
+        SDFCompute.SetTexture(kernal_SubtractMask, compute_id_SDFInput, SDF.GetReader());
+        SDFCompute.SetTexture(kernal_SubtractMask, compute_id_SDFOutput, SDF.GetWriter());
+        SDFCompute.Dispatch(kernal_SubtractMask, Mask.width / 8, Mask.height / 8, 1);
+
+        SDF.Swap();
     }
 
     private void StepSDF()
