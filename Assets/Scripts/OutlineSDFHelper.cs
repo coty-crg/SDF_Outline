@@ -132,7 +132,8 @@ public class OutlineSDFHelper : MonoBehaviour
         SDFCompute.SetInt(compute_id_texture_height, Mask.height);
         SDFCompute.SetInt(compute_id_maximum_outline_width, MaximumOutlineDistanceInPixels);
 
-        ClearTexturesContents();
+        // not necessary 
+        // ClearTexturesContents();
 
         ourCamera.targetTexture = Mask;
         ourCamera.forceIntoRenderTexture = true;
