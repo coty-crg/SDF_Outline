@@ -64,13 +64,13 @@ void Initialize(int3 id : SV_DispatchThreadID)
 void Step(int3 id : SV_DispatchThreadID)
 {
     // bounds checks 
-    if (id.x == 0 || id.y == 0 || id.x == texture_width - 1 || id.y == texture_height - 1)
+    if (id.x <= 2 || id.y <= 2 || id.x >= texture_width - 2 || id.y >= texture_height - 2)
     {
         SDFOutput[id.xy] = float4(0, 0, -1, 0);
         return;
     }
 
-    float4 smallest_result = SDFInput[id.xy];
+    float4 smallest_result = float4(0, 0, -1, 0);
     float smallest_distance = 1000;
 
     float uv_x = (float) id.x / texture_width;
@@ -127,7 +127,7 @@ void SubtractMask(int3 id : SV_DispatchThreadID)
     }
     else 
     {
-        input_sdf.w = saturate(pow(saturate(input_sdf.w), 2) * 100);
+        // input_sdf.w = saturate(pow(saturate(input_sdf.w), 2) * 100);
         SDFOutput[id.xy] = input_sdf;
     }
 }

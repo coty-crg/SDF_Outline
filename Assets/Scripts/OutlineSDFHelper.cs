@@ -39,8 +39,6 @@ public class OutlineSDFHelper : MonoBehaviour
         ourCamera = GetComponent<Camera>();
         ourCamera.enabled = false;
 
-        EnsureBuffers(); 
-
         kernal_ClearMask = SDFCompute.FindKernel("ClearMask");
         kernal_ClearSDF = SDFCompute.FindKernel("ClearSDF");
         kernal_Initialize = SDFCompute.FindKernel("Initialize");
@@ -54,6 +52,8 @@ public class OutlineSDFHelper : MonoBehaviour
         compute_id_texture_width = Shader.PropertyToID("texture_width");
         compute_id_texture_height = Shader.PropertyToID("texture_height");
         compute_id_maximum_outline_width = Shader.PropertyToID("maximum_outline_width");
+
+        EnsureBuffers();
 
         SDFCompute.SetInt(compute_id_texture_width, Mask.width);
         SDFCompute.SetInt(compute_id_texture_height, Mask.height);
@@ -122,6 +122,7 @@ public class OutlineSDFHelper : MonoBehaviour
             Mask.wrapMode = TextureWrapMode.Clamp;
             Mask.enableRandomWrite = true;
             Mask.Create();
+
         }
     }
 

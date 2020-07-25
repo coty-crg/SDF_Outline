@@ -49,12 +49,14 @@
             {
                 fixed4 col = tex2D(_MainTex, i.uv);
                 float4 sdf = tex2D(_OutlineSDF, i.uv);
+                sdf.w = saturate(pow(saturate(sdf.w), 2) * 100);
 
                 float withinRange = sdf.z < _MaximumOutlineDistanceInPixels && sdf.z > -0.0001;
                 col.rgb = lerp(col.rgb, _Color, sdf.w * withinRange);
 
                 return col;
             }
+
             ENDCG
         }
     }
